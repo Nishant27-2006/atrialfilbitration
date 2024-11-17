@@ -1,3 +1,4 @@
+# Install and download required datasets
 !pip install wfdb
 !wget -r -N -c -np https://physionet.org/files/afdb/1.0.0/
 
@@ -127,22 +128,78 @@ def plot_confusion_matrix(y_true, y_pred):
     plt.ylabel('True Labels')
     plt.show()
 
-# Main Function
+# Additional Visualizations
+def plot_roc_curve(y_true, y_pred_prob):
+    fpr, tpr, _ = roc_curve(y_true, y_pred_prob)
+    roc_auc = auc(fpr, tpr)
+
+    plt.figure(figsize=(8, 6))
+    plt.plot(fpr, tpr, color='blue', lw=2, label=f'ROC Curve (AUC = {roc_auc:.2f})')
+    plt.plot([0, 1], [0, 1], color='gray', linestyle='--')
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('Receiver Operating Characteristic (ROC) Curve')
+    plt.legend(loc='lower right')
+    plt.grid(alpha=0.3)
+    plt.show()
+
+def plot_precision_recall_curve(y_true, y_pred_prob):
+    precision, recall, _ = precision_recall_curve(y_true, y_pred_prob)
+    pr_auc = auc(recall, precision)
+
+    plt.figure(figsize=(8, 6))
+    plt.plot(recall, precision, color='green', lw=2, label=f'PR Curve (AUC = {pr_auc:.2f})')
+    plt.xlabel('Recall')
+    plt.ylabel('Precision')
+    plt.title('Precision-Recall Curve')
+    plt.legend(loc='lower left')
+    plt.grid(alpha=0.3)
+    plt.show()
+
+def calculate_metrics(y_true, y_pred):
+    f1 = f1_score(y_true, y_pred)
+    mcc = matthews_corrcoef(y_true, y_pred)
+    balanced_acc = balanced_accuracy_score(y_true, y_pred)
+    
+    print("\nEvaluation Metrics:")
+    print(f"F1 Score: {f1:.2f}")
+    print(f"Matthews Correlation Coefficient (MCC): {mcc:.2f}")
+    print(f"Balanced Accuracy: {balanced_acc:.2f}")
+    print("\nClassification Report:")
+    print(classification_report(y_true, y_pred, target_names=['Normal', 'Disease']))
+
+# Main Function with Additional Visualizations
 def main():
     record_base_path = './physionet.org/files/afdb/1.0.0/'
     files = [file.split('.')[0] for file in os.listdir(record_base_path) if file.endswith('.hea')]
     X, y = preprocess_dataset(files, record_base_path)
     plot_class_distribution(y, "Class Distribution Before Balancing")
+    
     X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, stratify=y, random_state=42)
     plot_class_distribution(y_train, "Training Set Class Distribution")
+    
     model = build_advanced_model((X_train.shape[1], 1))
     lr_scheduler = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3)
     early_stopping = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
-    history = model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=30, batch_size=64, callbacks=[lr_scheduler, early_stopping])
+    
+    history = model.fit(
+        X_train, y_train,
+        validation_data=(X_val, y_val),
+        epochs=30, batch_size=64,
+        callbacks=[lr_scheduler, early_stopping]
+    )
+    
     plot_training_history(history)
+    
     y_pred_prob = model.predict(X_val).ravel()
     y_pred = (y_pred_prob > 0.5).astype(int)
+    
     plot_confusion_matrix(y_val, y_pred)
+    plot_roc_curve(y_val, y_pred_prob)
+    plot_precision_recall_curve(y_val, y_pred_prob)
+    calculate_metrics(y_val, y_pred)
 
 if __name__ == "__main__":
     main()
